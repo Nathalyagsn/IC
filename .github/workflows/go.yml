@@ -1,4 +1,4 @@
-name: Go
+name: Go CI/CD
 
 on:
   push:
@@ -7,37 +7,44 @@ on:
     branches: [ '*' ]
 
 jobs:
-
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go_version: ['1.18', '1.17', '1.18']
+        go_version: ['1.18', '1.17']
     steps:
     - uses: actions/checkout@v3
-
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go_version }}
-      
     - name: Build-DB
       run: docker-compose build
-      
     - name: Create-DB
       run: docker-compose up -d
-
+    - name: Wait for DB
+      run: |
+        until docker exec <db-container-name> pg_isready; do
+          echo "Waiting for DB...";
+          sleep 3;
+        done
     - name: Test
-      run: go test -v main_test.go 
-      
-  
+      run: go test -v ./...
+    - name: Save build files
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-files
+        path: .
+
   build:
     needs: test
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         os: ['ubuntu-latest', 'ubuntu-18.04']
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/download-artifact@v3
+      with:
+        name: build-files
     - name: Build
       run: go build -v main.go
